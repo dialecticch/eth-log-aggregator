@@ -87,7 +87,7 @@ import (
 {{$structs := .Structs}}
 {{range $contract := .Contracts}}
 
-	// Watcher watches for harvested events and pipes them to an output channel.
+	// Watcher watches for events and pipes them to an output channel.
 	type {{.Type}}Watcher struct {	
 		contracts []{{.Type}}
 	
@@ -108,7 +108,7 @@ import (
 	}
 
 	{{range .Events}}
-		// Watch is a Harvested log subscription binding to a set of contracts.
+		// Watch is a {{.Normalized.Name}} log subscription binding to a set of contracts.
 		func (w *{{$contract.Type}}Watcher) Watch{{.Normalized.Name}}(opts *bind.WatchOpts, sink chan<- *{{$contract.Type}}{{.Normalized.Name}}{{range .Normalized.Inputs}}{{if .Indexed}}, {{.Name}} []{{bindtype .Type $structs}}{{end}}{{end}}) (event.Subscription, error) {
 			for _, c := range w.contracts {
 				sub, err := c.Watch{{.Normalized.Name}}(

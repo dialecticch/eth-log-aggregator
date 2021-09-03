@@ -1,5 +1,7 @@
 # eth-log-aggregator
 
+Easily listen to events from multiple contracts using go-ethereum bindings!
+
 ## Usage
 
 The usage of this tool is exactly the same as [`abigen`](https://geth.ethereum.org/docs/dapp/native-bindings). It is expected

@@ -13,18 +13,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// Lang is a target programming language selector to generate bindings for.
-type Lang int
-
-const (
-	LangGo Lang = iota
-)
-
 // Bind generates a Go wrapper around a contract ABI. This wrapper isn't meant
 // to be used as is in client code, but rather as an intermediate struct which
 // enforces compile time type safety and naming convention opposed to having to
 // manually maintain hard coded strings that break on runtime.
-func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, lang Lang, libs map[string]string, aliases map[string]string) (string, error) {
+func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]string, pkg string, libs map[string]string, aliases map[string]string) (string, error) {
 	var (
 		// contracts is the map of each individual contract requested binding
 		contracts = make(map[string]*tmplContract)
@@ -68,7 +61,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original
-			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
+			normalizedName := methodNormalizer(alias(aliases, original.Name))
 			// Ensure there is no duplicated identifier
 			var identifiers = callIdentifiers
 			if !original.IsConstant() {
@@ -86,7 +79,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 				}
 				if hasStruct(input.Type) {
-					bindStructType[lang](input.Type, structs)
+					bindStructType(input.Type, structs)
 				}
 			}
 			normalized.Outputs = make([]abi.Argument, len(original.Outputs))
@@ -96,7 +89,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 					normalized.Outputs[j].Name = capitalise(output.Name)
 				}
 				if hasStruct(output.Type) {
-					bindStructType[lang](output.Type, structs)
+					bindStructType(output.Type, structs)
 				}
 			}
 			// Append the methods to the call or transact lists
@@ -115,7 +108,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			normalized := original
 
 			// Ensure there is no duplicated identifier
-			normalizedName := methodNormalizer[lang](alias(aliases, original.Name))
+			normalizedName := methodNormalizer(alias(aliases, original.Name))
 			if eventIdentifiers[normalizedName] {
 				return "", fmt.Errorf("duplicated identifier \"%s\"(normalized \"%s\"), use --alias for renaming", original.Name, normalizedName)
 			}
@@ -129,7 +122,7 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 					normalized.Inputs[j].Name = fmt.Sprintf("arg%d", j)
 				}
 				if hasStruct(input.Type) {
-					bindStructType[lang](input.Type, structs)
+					bindStructType(input.Type, structs)
 				}
 			}
 			// Append the event to the accumulator list
@@ -190,33 +183,27 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 	buffer := new(bytes.Buffer)
 
 	funcs := map[string]interface{}{
-		"bindtype":      bindType[lang],
-		"bindtopictype": bindTopicType[lang],
-		"namedtype":     namedType[lang],
+		"bindtype":      bindType,
+		"bindtopictype": bindTopicType,
+		"namedtype":     namedType,
 		"capitalise":    capitalise,
 		"decapitalise":  decapitalise,
 	}
-	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource[lang]))
+	tmpl := template.Must(template.New("").Funcs(funcs).Parse(tmplSource))
 	if err := tmpl.Execute(buffer, data); err != nil {
 		return "", err
 	}
-	// For Go bindings pass the code through gofmt to clean it up
-	if lang == LangGo {
-		code, err := format.Source(buffer.Bytes())
-		if err != nil {
-			return "", fmt.Errorf("%v\n%s", err, buffer)
-		}
-		return string(code), nil
+
+	code, err := format.Source(buffer.Bytes())
+	if err != nil {
+		return "", fmt.Errorf("%v\n%s", err, buffer)
 	}
-	// For all others just return as is for now
-	return buffer.String(), nil
+	return string(code), nil
 }
 
 // bindType is a set of type binders that convert Solidity types to some supported
 // programming language types.
-var bindType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct) string{
-	LangGo: bindTypeGo,
-}
+var bindType = bindTypeGo
 
 // bindBasicTypeGo converts basic solidity types(except array, slice and tuple) to Go ones.
 func bindBasicTypeGo(kind abi.Type) string {
@@ -335,9 +322,7 @@ func bindTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 
 // bindTopicType is a set of type binders that convert Solidity types to some
 // supported programming language topic types.
-var bindTopicType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct) string{
-	LangGo: bindTopicTypeGo,
-}
+var bindTopicType = bindTopicTypeGo
 
 // bindTopicTypeGo converts a Solidity topic type to a Go one. It is almost the same
 // functionality as for simple types, but dynamic types get converted to hashes.
@@ -375,9 +360,7 @@ func bindTopicTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 
 // bindStructType is a set of type binders that convert Solidity tuple types to some supported
 // programming language struct definition.
-var bindStructType = map[Lang]func(kind abi.Type, structs map[string]*tmplStruct) string{
-	LangGo: bindStructTypeGo,
-}
+var bindStructType = bindStructTypeGo
 
 // bindStructTypeGo converts a Solidity tuple type to a Go one and records the mapping
 // in the given map.
@@ -457,9 +440,7 @@ func bindStructTypeJava(kind abi.Type, structs map[string]*tmplStruct) string {
 
 // namedType is a set of functions that transform language specific types to
 // named versions that may be used inside method names.
-var namedType = map[Lang]func(string, abi.Type) string{
-	LangGo: func(string, abi.Type) string { panic("this shouldn't be needed") },
-}
+var namedType = func(string, abi.Type) string { panic("this shouldn't be needed") }
 
 // namedTypeJava converts some primitive data types to named variants that can
 // be used as parts of method names.
@@ -498,9 +479,7 @@ func alias(aliases map[string]string, n string) string {
 
 // methodNormalizer is a name transformer that modifies Solidity method names to
 // conform to target language naming conventions.
-var methodNormalizer = map[Lang]func(string) string{
-	LangGo: abi.ToCamelCase,
-}
+var methodNormalizer = abi.ToCamelCase
 
 // capitalise makes a camel-case string which starts with an upper case character.
 var capitalise = abi.ToCamelCase

@@ -13,3 +13,5 @@ Once the tool has been built `go build`, you can simply generate the log aggrega
 abigen --abi contracts/ERC20.json --pkg contracts --type Token --out pkg/contracts/token.go
 eth-log-aggregator --abi contracts/ERC20.json --pkg contracts --type Token --out pkg/contracts/token_watcher.go
 ```
+
+**This is limited to go bindings**

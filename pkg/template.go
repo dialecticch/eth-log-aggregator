@@ -98,7 +98,7 @@ import (
 	}
 	
 	// NewWatcher returns a watcher.
-	func New{{.Type}}Watcher(contracts []{{.Type}}) *Watcher {
+	func New{{.Type}}Watcher(contracts []{{.Type}}) *{{.Type}}Watcher {
 		return &{{.Type}}Watcher{
 			contracts: contracts,
 		{{range .Events}}
@@ -113,6 +113,7 @@ import (
 			for _, c := range w.contracts {
 				sub, err := c.Watch{{.Normalized.Name}}(
 					opts,
+					sink,
 					{{range .Normalized.Inputs}}{{if .Indexed}}
 					{{.Name}},
 					{{end}}{{end}}
